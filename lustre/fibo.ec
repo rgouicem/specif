@@ -1,9 +1,0 @@
-node fibo
-  (tick: bool)
-returns
-  (x: int);
-
-let
-  x = (0 -> (pre (1 -> (x + (pre x)))));
-tel
-
