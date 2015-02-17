@@ -1,0 +1,11 @@
+node portillon (A, B: bool) returns (alarm: bool);
+var seen_a: bool;
+let
+  seen_a = false -> if A and not pre seen_a then true
+                    else if B and pre seen_a then false
+                         else pre seen_a;
+
+  alarm = B-> ((not pre seen_a and B) or (pre seen_a and A));
+
+  assert not (A and B);
+tel

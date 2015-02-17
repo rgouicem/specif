@@ -1,0 +1,7 @@
+node portillon (A, B: bool) returns (alarm: bool);
+var seen_a: bool;
+let
+  seen_a = 
+
+  assert not (A and B);
+tel

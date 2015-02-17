@@ -1,0 +1,3 @@
+node watchdog (set, reset: bool, delay: int) returns (alarm: bool);
+let
+  

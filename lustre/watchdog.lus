@@ -1,0 +1,15 @@
+node watchdog (set, reset, deadline: bool) returns (alarm: bool);
+var isset: bool;
+let
+  isset = if set then true else if reset then false else false->(pre isset);
+  alarm = isset and deadline;
+  assert not (set and reset);
+tel
+
+
+node watchdog_delay (set, reset: bool; delay: int) returns (alarm: bool);
+var time: int;
+let
+  time = if set then 0 else 0->(if pre time < delay then pre time + 1 else 0);
+  alarm = if time < delay then watchdog(set, reset, false) else watchdog(set, reset, true);
+tel
