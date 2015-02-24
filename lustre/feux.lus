@@ -12,4 +12,6 @@ let
   veilleuses = (state = 1);
   codes = (state = 2);
   phares = (state = 3);
+  
+  assert not ((cp and (ti or td)) or (ti and td));
 tel
