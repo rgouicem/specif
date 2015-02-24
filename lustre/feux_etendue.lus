@@ -1,0 +1,8 @@
+include "feux.lus"
+
+node feux_etendue (td, ti, cp, ab, lp: bool) returns (veilleuses, codes, phares, anti_brouillard, longue_portee: bool);
+let
+  (veilleuses,codes,phares) = feux(td,ti,cp);
+  anti_brouillard = ab and codes;
+  longue_portee = lp and phares;
+tel
