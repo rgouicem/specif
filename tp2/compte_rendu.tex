@@ -15,6 +15,7 @@
  
 \maketitle
  
+\section{Métronome}
 \paragraph{Question 1}
 L'automate généré par la commande \texttt{lus2oc -0} contient un unique noeud muni d'une unique transition vers 
 lui-même. 
@@ -54,6 +55,25 @@ Soit $D = \{premier\_cycle, first, hz, n, state, tic, tac\}$, avec $premier\_cyc
 \end{tikzpicture}
 
 \paragraph{Question 3}
-L'automate généré avec \texttt{lus2oc -2} contient 
- 
+L'automate généré avec \texttt{lus2oc -2} contient 5 noeuds. On peut identifier les variables suivantes :
+ \begin{itemize}
+  \item V1 : reset
+  \item V2 : delay
+  \item V3 : hz $>$ 0
+  \item V4 : hz
+  \item V5 : n $<$ 1
+  \item V6 : n
+  \item V7 : n $>$ 0
+  \item V8 : tic
+  \item V9 : tac
+\end{itemize}
+\paragraph{}
+On en déduit que l'automate a été déplié selon les variables \texttt{first}, \texttt{state} et \texttt{premier\_cycle}.
+
+\section{Feux de voiture (version étendue)}
+\paragraph{Comportement testé avec \texttt{luciole}}
+\begin{center}
+  \makebox[\textwidth]{\includegraphics[width=\paperwidth]{feux_etendue.png}}
+\end{center}
+
 \end{document}
