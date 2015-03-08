@@ -1,0 +1,51 @@
+node controleur (porte_ouverte, en_station, attention_depart, demande_porte: bool) 
+        returns (ouvrir_porte,  fermer_porte,  porte_ok: bool);
+var porte_demandee: bool; state: int;
+    -- state = {0: en station, 1: ouvrir porte, 2: fermer porte, 3: roule}
+let
+  porte_demandee = false->(not porte_ouverte and (demande_porte or pre porte_demandee) and not attention_depart);
+  state = 0->(if pre state = 0 then (if attention_depart then (if porte_ouverte then 2 else 3)
+                                     else (if porte_demandee then 1 else 0))
+              else (if pre state = 1 then (if porte_ouverte then 0 else 1)
+                    else (if pre state = 2 then (if porte_ouverte then 2 else 3)
+                          else (if en_station then (if porte_demandee then 1 else 0)
+                                else 3))));
+  ouvrir_porte = state = 1;
+  fermer_porte = state = 2;
+  porte_ok = true->(not porte_ouverte and not pre state = 3);
+tel
+
+node porte (ouvrir_porte, fermer_porte: bool; delai: int) returns (porte_ouverte: bool);
+var timer, state: int;
+    -- state = {0: closed, 1: opening, 2: opened, 3: closing}
+let
+  assert not (ouvrir_porte and fermer_porte);
+  state = 0->(if pre state = 0 then (if ouvrir_porte then 1 else 0)
+              else (if pre state = 1 then (if timer = 0 then 2 else 1)
+                    else (if pre state = 2 then (if fermer_porte then 3 else 2)
+                          else (if timer = 0 then 0 else 3))));
+  porte_ouverte = false->((pre state = 2) or (pre state = 3));
+  timer = 0->(if (pre state = 0 and ouvrir_porte) or (pre state = 2 and fermer_porte) then delai-1 else pre timer -1);
+tel
+
+node tramway (porte_ok: bool; delai: int) returns (attention_depart, en_station: bool);
+var waiting, driving, state: int;
+    -- state = {0: en_station, 1: attention depart, 2: roule}
+let
+  state = 0->(if pre state = 0 then (if waiting = 0 then 1 else 0)
+              else (if pre state = 1 then (if porte_ok then 2 else 1)
+                    else (if driving = 0 then 0 else 2)));
+  waiting = (delai-1)->(if pre state = 0 then pre waiting - 1 else delai-1);
+  driving = 0->(if pre state = 2 then pre driving - 1 else delai-1);
+  en_station = state = 0 or state = 1;
+  attention_depart = state = 1;
+tel
+
+node main (delai_tram, delai_porte: int; demande_porte: bool)
+  returns (porte_ouverte, ouvrir_porte, fermer_porte, porte_ok: bool);
+var attention_depart, en_station: bool;
+let
+  (attention_depart, en_station) = tramway(porte_ok, delai_tram);
+  porte_ouverte = porte(ouvrir_porte, fermer_porte, delai_porte);
+  (ouvrir_porte, fermer_porte, porte_ok) = controleur(porte_ouverte, en_station, attention_depart, demande_porte);
+tel
