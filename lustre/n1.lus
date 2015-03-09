@@ -1,0 +1,19 @@
+node n1 (a, b: bool) returns (s1, s2: bool);
+let
+  s1 = 0->a and pre b;
+  s2 = 1->not pre s2;
+tel
+
+node n2 (a, b: bool) returns (s1, s2: bool);
+let
+  s1 = 0->not(a xor pre b);
+  s2 = 1->not pre s2;
+tel
+
+node equi(a, b: bool) returns (equals: bool);
+var s11, s12, s21, s22: bool;
+let
+  (s11, s21) = n1(a, b);
+  (s12, s22) = n2(a, b);
+  equals = (not (s11 xor s12)) and (not (s21 xor s22));
+tel
