@@ -1,0 +1,96 @@
+\documentclass[a4paper, 11pt]{article}
+ 
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage[frenchb]{babel}
+\usepackage{tikz}
+\usetikzlibrary{arrows,automata}
+\usepackage{makecell}
+\usepackage{amsthm}
+
+\newtheorem{propriete}{Propriété}
+
+\begin{document}
+ 
+\title{SPECIF\\Compte-rendu de TME}
+\author{Redha Gouicem}
+\date{09/03/2015}
+ 
+\maketitle
+
+\section{Feux de voitures}
+\paragraph{Question 2}
+Les propriétés suivantes ont été vérifiées sur notre modélisation des feux de voiture étendus grâce à \texttt{xlesar} (projet \texttt{feux\_etendue.lesar} dans l'archive):
+\begin{propriete}
+ Veilleuses, codes et phares sont exclusifs.
+\end{propriete}
+\begin{propriete}
+  On ne peut être en anti-brouillard que si l'on est en codes.
+\end{propriete}
+\begin{propriete}
+  On ne peut être en longue-portée que si l'on est en phares.
+\end{propriete}
+
+\section{\'Equivalence de systèmes}
+\paragraph{Question 3}
+On teste l'équivalence de ces deux noeuds \texttt{lustre}.
+\begin{verbatim}
+node n1 (a, b: bool) returns (s1, s2: bool);
+let
+  s1 = 0->a and pre b;
+  s2 = 1->not pre s2;
+tel
+
+node n2 (a, b: bool) returns (s1, s2: bool);
+let
+  s1 = 0->not(a xor pre b);
+  s2 = 1->not pre s2;
+tel
+\end{verbatim}
+La séquence suivante, générée par \texttt{xlesar} montre que cette propriété est fausse :
+
+\begin{verbatim}
+--- TRANSITION 1 ---
+not b
+--- TRANSITION 2 ---
+not a
+\end{verbatim}
+
+\section{Tramway}
+\paragraph{Question 4}
+On va d'abord expliciter les liens entre les différents acteurs du système (signaux échangés), à savoir le contrôleur, la porte, le tramway et l'usager.\newline
+\begin{center}
+\begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,node distance=2.8cm,
+                    semithick]
+  \tikzstyle{every state}=[fill=white,text=black]
+
+  \node[state] (0) {porte};
+  \node[state] (1) [right of=0] {controleur};
+  \node[state] (2) [right of=1] {tramway};
+  \node[state] (3) [below of=1] {usager};
+  \path (0) edge [bend right] node {a} (1)
+  (2) edge [bend right] node {b} (1)
+  (3) edge node {c} (1)
+  (1) edge [bend right] node {a'} (0)
+  (1) edge [bend right] node {b'} (2);
+\end{tikzpicture}
+\end{center}
+
+Avec :
+\begin{itemize}
+  \item a = porte\_ouverte
+  \item b = en\_station, attention\_depart
+  \item c = demande\_porte
+  \item a' = ouvrir\_porte, fermer\_porte
+  \item b' = porte\_ok
+\end{itemize}
+
+\paragraph{Question 5}
+On souhaite désormais vérifier la propriété suivante :
+\begin{propriete}
+  On ne peut pas rouler avec la porte ouverte.
+\end{propriete}
+Avec le premier modèle (fichier \texttt{tramway.lus}), il est impossible de vérifier cette propriété puisque les signaux du tramway (\texttt{en\_station} notamment) sont des entrées du système. Rien ne nous empêche de démarrer (mettre \texttt{en\_station} à \texttt{false}) malgré que le signal \texttt{porte\_ok} soit \texttt{false}. La seconde version (\texttt{tramway2.lus}) tente de résoudre se problème en modélisant également le tramway. Cependant, cette version n'est pas fonctionnelle à ce jour.
+
+
+\end{document}
