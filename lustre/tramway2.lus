@@ -12,7 +12,7 @@ let
                                 else 3))));
   ouvrir_porte = state = 1;
   fermer_porte = state = 2;
-  porte_ok = true->(not porte_ouverte and not pre state = 3);
+  porte_ok = true->(not porte_ouverte and not (pre state = 3));
 tel
 
 node porte (ouvrir_porte, fermer_porte: bool; delai: int) returns (porte_ouverte: bool);
@@ -42,8 +42,7 @@ let
 tel
 
 node main (delai_tram, delai_porte: int; demande_porte: bool)
-  returns (porte_ouverte, ouvrir_porte, fermer_porte, porte_ok: bool);
-var attention_depart, en_station: bool;
+  returns (porte_ouverte, ouvrir_porte, fermer_porte, porte_ok, en_station, attention_depart: bool);
 let
   (attention_depart, en_station) = tramway(porte_ok, delai_tram);
   porte_ouverte = porte(ouvrir_porte, fermer_porte, delai_porte);
