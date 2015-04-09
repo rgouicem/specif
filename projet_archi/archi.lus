@@ -1,0 +1,28 @@
+const MEMSIZE: int = 2;
+const WORDSIZE:  int = 1;
+
+node memory () returns ;
+var mem: bool ^ MEMSIZE ^ WORDSIZE;
+let
+
+tel
+
+node proc () returns ;
+let
+
+tel
+
+node bcu () returns ;
+let
+
+tel
+
+node bus () returns ;
+let
+
+tel
+
+node cache () returns ;
+let
+
+tel
