@@ -1,34 +1,45 @@
 const NPROCS: int=1;
 const MEMSIZE: int = 2;
 const WORDSIZE: int = 1;
-type b_wires: bool ^ (MEMSIZE+3);
+
+-- wires definition
+type b_wires = bool ^ 4;
 const AD: int=0;
-const CTRL: int=1;
+const CTRL: int=1;   -- true = write; false = read
 const VALID: int=2;
 const DT: int=3;
 
-node memory (arb_gnt: bool; b_out: b_wires) returns (b_in_mem: b_wires);
-var mem: bool ^ (MEMSIZE*WORDSIZE);
+-- target IDs
+const NONE: int = 0;
+const CPU1: int = 1;
+const MEM: int = 2;
+
+node memory (arb_gnt: int; b_out: b_wires) returns (b_in_mem: b_wires; mem: bool ^ (MEMSIZE*WORDSIZE));
+--var mem: bool ^ (MEMSIZE*WORDSIZE);
 let
-  
+  mem = [0, 0]->(if b_out[VALID] and b_out[CTRL] then (if not b_out[AD] then [b_out[DT], pre mem[1]] else [pre mem[0], b_out[D]]) else pre mem);
+  b_in_mem = [0, 0, 0, 0]->(if b_out[AD] then [0, 0, true, mem[1]] else [0, 0, true, mem[0]]);
 tel
 
-node proc (op, valid, gel: bool; val: bool ^ WORDSIZE; ad: int) returns (op_out, valid_out: bool; val_out: bool ^ WORDSIZE; ad_out: int);
+node proc (op, valid, gel: bool; val: bool ^ WORDSIZE; ad: bool) returns (op_out, valid_out: bool; val_out: bool ^ WORDSIZE; ad_out: bool);
 let
-
+  op_out = op;
+  valid_out = valid and not gel;
+  val_out = val;
+  ad_out = ad;
 tel
 
 node bcu (req: bool ^ NPROCS) returns (arb_gnt: int);
 let
-
+  
 tel
 
-node bus (b_in: b_wires ^ ((NPROCS+1)) returns (b_out: b_wires);
+node bus (b_in: b_wires ^ (NPROCS+1)) returns (b_out: b_wires);
 let
 
 tel
 
-node cache (op, valid, gnt: bool; val: bool ^ WORDSIZE; ad: int; b_out: b_wires) returns (gel, b_req: bool; b_in: b_wires);
+node cache (op, valid: bool; gnt: int; val: bool ^ WORDSIZE; ad: bool; b_out: b_wires) returns (gel, b_req: bool; b_in: b_wires; val_out: bool ^ WORDSIZE);
 let
   
 tel
