@@ -11,14 +11,16 @@ const DT: int=3;
 
 -- target IDs
 const NONE: int = 0;
-const CPU1: int = 1;
-const MEM: int = 2;
+const MEM:  int = 1;
+const CPU1: int = 2;
+const CPU2: int = 3;
+const CPU3: int = 4;
 
 node memory (arb_gnt: int; b_out: b_wires) returns (b_in_mem: b_wires; mem: bool ^ (MEMSIZE*WORDSIZE));
 --var mem: bool ^ (MEMSIZE*WORDSIZE);
 let
   mem = [0, 0]->(if b_out[VALID] and b_out[CTRL] then (if not b_out[AD] then [b_out[DT], pre mem[1]] else [pre mem[0], b_out[D]]) else pre mem);
-  b_in_mem = [0, 0, 0, 0]->(if b_out[AD] then [0, 0, true, mem[1]] else [0, 0, true, mem[0]]);
+  b_in_mem = [0, 0, 0, 0]->(if b_out[VALID] then (if b_out[AD] then [0, 0, true, mem[1]] else [0, 0, true, mem[0]]) else [0, 0, false, 0];
 tel
 
 node proc (op, valid, gel: bool; val: bool ^ WORDSIZE; ad: bool) returns (op_out, valid_out: bool; val_out: bool ^ WORDSIZE; ad_out: bool);
@@ -30,8 +32,10 @@ let
 tel
 
 node bcu (req: bool ^ NPROCS) returns (arb_gnt: int);
+var last: int;
 let
-  
+  last = CPU1->(if pre arb_gnt >= CPU1 then pre arb_gnt else pre last);
+  arb_gnt = NONE->(if req[(last-CPU1)%NPROCS] then (CPU1+last)%NPROCS);
 tel
 
 node bus (b_in: b_wires ^ (NPROCS+1)) returns (b_out: b_wires);
