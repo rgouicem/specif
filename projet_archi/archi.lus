@@ -1,4 +1,4 @@
-const NPROCS: int=1;
+const NPROCS: int=3;
 const MEMSIZE: int = 2;
 const WORDSIZE: int = 1;
 
@@ -16,11 +16,12 @@ const CPU1: int = 2;
 const CPU2: int = 3;
 const CPU3: int = 4;
 
-node memory (arb_gnt: int; b_out: b_wires) returns (b_in_mem: b_wires; mem: bool ^ (MEMSIZE*WORDSIZE));
+node memory (arb_gnt: int; b_out: b_wires) returns (b_in_mem: b_wires; b_req: bool; mem: bool ^ (MEMSIZE*WORDSIZE));
 --var mem: bool ^ (MEMSIZE*WORDSIZE);
 let
-  mem = [0, 0]->(if b_out[VALID] and b_out[CTRL] then (if not b_out[AD] then [b_out[DT], pre mem[1]] else [pre mem[0], b_out[D]]) else pre mem);
-  b_in_mem = [0, 0, 0, 0]->(if b_out[VALID] then (if b_out[AD] then [0, 0, true, mem[1]] else [0, 0, true, mem[0]]) else [0, 0, false, 0];
+  mem = [0, 0]->(if b_out[VALID] and b_out[CTRL] then (if not b_out[AD] then [b_out[DT], pre mem[1]] else [pre mem[0], b_out[DT]]) else pre mem);
+  b_in_mem = [0, 0, 0, 0]->(if b_out[VALID] then (if b_out[AD] then [0, 0, true, mem[1]] else [0, 0, true, mem[0]]) else [0, 0, false, 0]);
+  b_req = false->(if b_out[VALID] and not b_out[CTRL] then true else false);
 tel
 
 node proc (op, valid, gel: bool; val: bool ^ WORDSIZE; ad: bool) returns (op_out, valid_out: bool; val_out: bool ^ WORDSIZE; ad_out: bool);
@@ -31,21 +32,40 @@ let
   ad_out = ad;
 tel
 
-node bcu (req: bool ^ NPROCS) returns (arb_gnt: int);
-var last: int;
+node bcu (req: bool ^ (NPROCS+1)) returns (arb_gnt: int);
+  --var last: int;
 let
-  last = CPU1->(if pre arb_gnt >= CPU1 then pre arb_gnt else pre last);
-  arb_gnt = NONE->(if req[(last-CPU1)%NPROCS] then (CPU1+last)%NPROCS);
+  --  last = CPU1->(if pre arb_gnt >= CPU1 then pre arb_gnt else pre last);
+  --  arb_gnt = NONE->(if req[MEM-1] then MEM
+  --                   else if req[last%NPROCS+1] then last%NPROCS+1
+  --                        else if req[(last+1)%NPROCS+1] then (last+1)%NPROCS+1
+  --                             else if req[(last+2)%NPROCS+1] then (last+2)%NPROCS+1
+  --                                  else NONE);
+  arb_gnt = NONE->(if req[MEM-1] then MEM
+                   else if req[CPU1-1] then CPU1
+                        else if req[CPU2-1] then CPU2
+                             else if req[CPU3-1] then CPU3
+                                  else NONE);
 tel
 
-node bus (b_in: b_wires ^ (NPROCS+1)) returns (b_out: b_wires);
+node bus (b_in: bool ^ (4*(NPROCS+1)); arb_gnt: int) returns (b_out: b_wires);
 let
-
+  b_out = [0, 0, false, 0]->(if arb_gnt = MEM then [b_in[AD], b_in[CTRL], b_in[VALID], b_in[DT]]
+                             else if arb_gnt = CPU1 then [b_in[4+AD], b_in[4+CTRL], b_in[4+VALID], b_in[4+DT]]
+                                  else if arb_gnt = CPU2 then [b_in[8+AD], b_in[8+CTRL], b_in[8+VALID], b_in[8+DT]]
+                                       else if arb_gnt = CPU3 then [b_in[12+AD], b_in[12+CTRL], b_in[12+VALID], b_in[12+DT]]
+                                            else [0, 0, false, 0]);
 tel
 
 node cache (op, valid: bool; gnt: int; val: bool ^ WORDSIZE; ad: bool; b_out: b_wires) returns (gel, b_req: bool; b_in: b_wires; val_out: bool ^ WORDSIZE);
+var c_ad, c_val: bool;
 let
-  
+  c_ad = ;
+  c_val = ;
+  gel = ;
+  b_in = ;
+  b_req = ;
+  val_out = ;
 tel
 
 node main () returns ();
