@@ -58,14 +58,44 @@ let
 tel
 
 node cache (op, valid: bool; gnt: int; val: bool ^ WORDSIZE; ad: bool; b_out: b_wires) returns (gel, b_req: bool; b_in: b_wires; val_out: bool ^ WORDSIZE);
-var c_ad, c_val: bool;
+var c_addr, c_data, c_valid, next_addr: bool;
+var state: int; -- 0: idle, 1: rd_miss, 2: rd_wait, 3: rd_upd, 4: wr, 5: wr_wait
 let
-  c_ad = ;
-  c_val = ;
-  gel = ;
-  b_in = ;
-  b_req = ;
-  val_out = ;
+  c_addr = 0->(if state = 3 then next_addr else pre_c_addr);
+  c_valid = 0->(if state = 1 then false
+                else if state = 3 then true
+                     else pre c_valid);
+  c_data = 0->(if state = 3 then b_out[DT]
+               else if state = 4 and c_addr = ad then val
+                    else pre c_data);
+  gel = false->(if state = 0 or state = 3 or (state = 5 and b_out[VALID]) then false
+                else if state = 1 or state = 2 or state = 4 or (state = 5 and not b_out[VALID]) then true
+                     else pre gel);
+  b_in = [0, 0, false, 0]->(if state = 0 then [ad, op, true, val]
+                            else if state = 1 or state = 2 or state = 4 or state = 5 then pre b_in
+                                 else [0, 0, false, 0]);
+  b_req = false->(if state = 1 or state = 4 then true
+                  else if state = 2 and state = 5 then pre b_req
+                       else false);
+  val_out = 0->(if state = 3 or (state = 0 and c_addr = ad and not op) then c_data
+                else pre val_out);
+  state = 0->(if state = 0 -- idle
+              then if not op then -- idle read
+                     if c_addr = ad then 0 -- idle read hit
+                     else 1 -- idle read miss
+                   else 4 -- idle write
+              else if state = 1 -- rd_miss
+                   then 2
+                   else if state = 2 -- rd_wait
+                        then if b_out[VALID] then 3 else 2
+                        else if state = 3 -- rd_upd
+                             then 0
+                             else if state = 4 -- wr
+                                  then 5
+                                  else -- wr_wait
+                                    if b_out[VALID]
+                                    then 0
+                                    else 5);
 tel
 
 node main () returns ();
