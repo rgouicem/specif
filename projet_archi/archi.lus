@@ -16,19 +16,35 @@ const CPU1: int = 2;
 const CPU2: int = 3;
 const CPU3: int = 4;
 
-node memory (arb_gnt: int; b_out: b_wires) returns (b_in_mem: b_wires; b_req: bool; mem: bool ^ (MEMSIZE*WORDSIZE));
---var mem: bool ^ (MEMSIZE*WORDSIZE);
+node memory (arb_gnt: int; b_out: b_wires) returns (b_in_mem: b_wires; b_req: bool);
+var mem: bool ^ (MEMSIZE*WORDSIZE);
 let
   mem = [0, 0]->(if b_out[VALID] and b_out[CTRL] then (if not b_out[AD] then [b_out[DT], pre mem[1]] else [pre mem[0], b_out[DT]]) else pre mem);
   b_in_mem = [0, 0, 0, 0]->(if b_out[VALID] then (if b_out[AD] then [0, 0, true, mem[1]] else [0, 0, true, mem[0]]) else [0, 0, false, 0]);
   b_req = false->(if b_out[VALID] and not b_out[CTRL] then true else false);
 tel
 
-node proc (op, valid, gel: bool; val: bool ^ WORDSIZE; ad: bool) returns (op_out, valid_out: bool; val_out: bool ^ WORDSIZE; ad_out: bool);
+node proc1 (op, valid, gel, data_cache, data_in, ad: bool) returns (op_out, valid_out, data_out, ad_out: bool);
 let
   op_out = op;
   valid_out = valid and not gel;
-  val_out = val;
+  data_out = data_in;
+  ad_out = ad;
+tel
+
+node proc2 (op, valid, gel, data_cache, data_in, ad: bool) returns (op_out, valid_out, data_out, ad_out: bool);
+let
+  op_out = op;
+  valid_out = valid and not gel;
+  data_out = data_in;
+  ad_out = ad;
+tel
+
+node proc3 (op, valid, gel, data_cache, data_in, ad: bool) returns (op_out, valid_out, data_out, ad_out: bool);
+let
+  op_out = op;
+  valid_out = valid and not gel;
+  data_out = data_in;
   ad_out = ad;
 tel
 
@@ -57,48 +73,229 @@ let
                                             else [0, 0, false, 0]);
 tel
 
-node cache (op, valid: bool; gnt: int; val: bool ^ WORDSIZE; ad: bool; b_out: b_wires) returns (gel, b_req: bool; b_in: b_wires; val_out: bool ^ WORDSIZE);
-var c_addr, c_data, c_valid, next_addr: bool;
-var state: int; -- 0: idle, 1: rd_miss, 2: rd_wait, 3: rd_upd, 4: wr, 5: wr_wait
+node cache (op, valid: bool; gnt: int; val: bool; ad: bool; b_out: b_wires) returns (gel, b_req, val_out: bool; b_in: b_wires);
+var c_addr, c_valid, c_data, next_addr: bool; 
+    state: int; -- 0: idle, 1: rd_miss, 2: rd_wait, 3: rd_upd, 4: wr, 5: wr_wait
 let
-  c_addr = 0->(if state = 3 then next_addr else pre_c_addr);
+  c_addr = 0->(if state = 3 then next_addr else pre c_addr);
+
   c_valid = 0->(if state = 1 then false
                 else if state = 3 then true
                      else pre c_valid);
+
   c_data = 0->(if state = 3 then b_out[DT]
                else if state = 4 and c_addr = ad then val
-                    else pre c_data);
-  gel = false->(if state = 0 or state = 3 or (state = 5 and b_out[VALID]) then false
-                else if state = 1 or state = 2 or state = 4 or (state = 5 and not b_out[VALID]) then true
-                     else pre gel);
-  b_in = [0, 0, false, 0]->(if state = 0 then [ad, op, true, val]
-                            else if state = 1 or state = 2 or state = 4 or state = 5 then pre b_in
+                    else if b_out[CTRL] and b_out[AD] = c_addr and c_valid then b_out[DT]
+                         else pre c_data);
+
+  gel = false->(if state = 0 then false else true);
+
+  b_in = [0, 0, false, 0]->(if state = 1 then if valid then [ad, op, true, val] else [ad, op, false, val] 
+                            else if state = 2 or state = 4 or state = 5 then pre b_in
                                  else [0, 0, false, 0]);
+
   b_req = false->(if state = 1 or state = 4 then true
-                  else if state = 2 and state = 5 then pre b_req
+                  else if state = 2 or state = 5 then pre b_req
                        else false);
+
   val_out = 0->(if state = 3 or (state = 0 and c_addr = ad and not op) then c_data
                 else pre val_out);
-  state = 0->(if state = 0 -- idle
+
+  state = 0->(if pre state = 0 and valid -- idle
               then if not op then -- idle read
-                     if c_addr = ad then 0 -- idle read hit
+                     if pre c_addr = ad and pre c_valid then 0 -- idle read hit
                      else 1 -- idle read miss
                    else 4 -- idle write
-              else if state = 1 -- rd_miss
-                   then 2
-                   else if state = 2 -- rd_wait
+              else if pre state = 1 -- rd_miss
+                   then if gnt = CPU1 then 2 else pre state
+                   else if pre state = 2 -- rd_wait
                         then if b_out[VALID] then 3 else 2
-                        else if state = 3 -- rd_upd
+                        else if pre state = 3 -- rd_upd
                              then 0
-                             else if state = 4 -- wr
-                                  then 5
-                                  else -- wr_wait
-                                    if b_out[VALID]
-                                    then 0
-                                    else 5);
+                             else if pre state = 4 -- wr
+                                  then if gnt = CPU1 then 5 else pre state
+                                  else if pre state = 5 -- wr_wait
+                                       then if b_out[VALID]
+                                            then 0
+                                            else 5
+                                       else pre state);
+
+  next_addr = 0->(if state = 1 then ad else pre next_addr);
 tel
 
-node main () returns ();
+node cache1 (op, valid: bool; gnt: int; val: bool; ad: bool; b_out: b_wires) returns (gel, b_req, val_out: bool; b_in: b_wires);
+var c_addr, c_valid, c_data, next_addr: bool; 
+    state: int; -- 0: idle, 1: rd_miss, 2: rd_wait, 3: rd_upd, 4: wr, 5: wr_wait
 let
-  
+  c_addr = 0->(if state = 3 then next_addr else pre c_addr);
+
+  c_valid = 0->(if state = 1 then false
+                else if state = 3 then true
+                     else pre c_valid);
+
+  c_data = 0->(if state = 3 then b_out[DT]
+               else if state = 4 and c_addr = ad then val
+                    else if b_out[CTRL] and b_out[AD] = c_addr and c_valid then b_out[DT]
+                         else pre c_data);
+
+  gel = false->(if state = 0 then false else true);
+
+  b_in = [0, 0, false, 0]->(if state = 1 then if valid then [ad, op, true, val] else [ad, op, false, val] 
+                            else if state = 2 or state = 4 or state = 5 then pre b_in
+                                 else [0, 0, false, 0]);
+
+  b_req = false->(if state = 1 or state = 4 then true
+                  else if state = 2 or state = 5 then pre b_req
+                       else false);
+
+  val_out = 0->(if state = 3 or (state = 0 and c_addr = ad and not op) then c_data
+                else pre val_out);
+
+  state = 0->(if pre state = 0 and valid -- idle
+              then if not op then -- idle read
+                     if pre c_addr = ad and pre c_valid then 0 -- idle read hit
+                     else 1 -- idle read miss
+                   else 4 -- idle write
+              else if pre state = 1 -- rd_miss
+                   then if gnt = CPU1 then 2 else pre state
+                   else if pre state = 2 -- rd_wait
+                        then if b_out[VALID] then 3 else 2
+                        else if pre state = 3 -- rd_upd
+                             then 0
+                             else if pre state = 4 -- wr
+                                  then if gnt = CPU1 then 5 else pre state
+                                  else if pre state = 5 -- wr_wait
+                                       then if b_out[VALID]
+                                            then 0
+                                            else 5
+                                       else pre state);
+
+  next_addr = 0->(if state = 1 then ad else pre next_addr);
 tel
+
+node cache2 (op, valid: bool; gnt: int; val: bool; ad: bool; b_out: b_wires) returns (gel, b_req, val_out: bool; b_in: b_wires);
+var c_addr, c_valid, c_data, next_addr: bool; 
+    state: int; -- 0: idle, 1: rd_miss, 2: rd_wait, 3: rd_upd, 4: wr, 5: wr_wait
+let
+  c_addr = 0->(if state = 3 then next_addr else pre c_addr);
+
+  c_valid = 0->(if state = 1 then false
+                else if state = 3 then true
+                     else pre c_valid);
+
+  c_data = 0->(if state = 3 then b_out[DT]
+               else if state = 4 and c_addr = ad then val
+                    else if b_out[CTRL] and b_out[AD] = c_addr and c_valid then b_out[DT]
+                         else pre c_data);
+
+  gel = false->(if state = 0 then false else true);
+
+  b_in = [0, 0, false, 0]->(if state = 1 then if valid then [ad, op, true, val] else [ad, op, false, val] 
+                            else if state = 2 or state = 4 or state = 5 then pre b_in
+                                 else [0, 0, false, 0]);
+
+  b_req = false->(if state = 1 or state = 4 then true
+                  else if state = 2 or state = 5 then pre b_req
+                       else false);
+
+  val_out = 0->(if state = 3 or (state = 0 and c_addr = ad and not op) then c_data
+                else pre val_out);
+
+  state = 0->(if pre state = 0 and valid -- idle
+              then if not op then -- idle read
+                     if pre c_addr = ad and pre c_valid then 0 -- idle read hit
+                     else 1 -- idle read miss
+                   else 4 -- idle write
+              else if pre state = 1 -- rd_miss
+                   then if gnt = CPU1 then 2 else pre state
+                   else if pre state = 2 -- rd_wait
+                        then if b_out[VALID] then 3 else 2
+                        else if pre state = 3 -- rd_upd
+                             then 0
+                             else if pre state = 4 -- wr
+                                  then if gnt = CPU1 then 5 else pre state
+                                  else if pre state = 5 -- wr_wait
+                                       then if b_out[VALID]
+                                            then 0
+                                            else 5
+                                       else pre state);
+
+  next_addr = 0->(if state = 1 then ad else pre next_addr);
+tel
+
+node cache3 (op, valid: bool; gnt: int; val: bool; ad: bool; b_out: b_wires) returns (gel, b_req, val_out: bool; b_in: b_wires);
+var c_addr, c_valid, c_data, next_addr: bool; 
+    state: int; -- 0: idle, 1: rd_miss, 2: rd_wait, 3: rd_upd, 4: wr, 5: wr_wait
+let
+  c_addr = 0->(if state = 3 then next_addr else pre c_addr);
+
+  c_valid = 0->(if state = 1 then false
+                else if state = 3 then true
+                     else pre c_valid);
+
+  c_data = 0->(if state = 3 then b_out[DT]
+               else if state = 4 and c_addr = ad then val
+                    else if b_out[CTRL] and b_out[AD] = c_addr and c_valid then b_out[DT]
+                         else pre c_data);
+
+  gel = false->(if state = 0 then false else true);
+
+  b_in = [0, 0, false, 0]->(if state = 1 then if valid then [ad, op, true, val] else [ad, op, false, val] 
+                            else if state = 2 or state = 4 or state = 5 then pre b_in
+                                 else [0, 0, false, 0]);
+
+  b_req = false->(if state = 1 or state = 4 then true
+                  else if state = 2 or state = 5 then pre b_req
+                       else false);
+
+  val_out = 0->(if state = 3 or (state = 0 and c_addr = ad and not op) then c_data
+                else pre val_out);
+
+  state = 0->(if pre state = 0 and valid -- idle
+              then if not op then -- idle read
+                     if pre c_addr = ad and pre c_valid then 0 -- idle read hit
+                     else 1 -- idle read miss
+                   else 4 -- idle write
+              else if pre state = 1 -- rd_miss
+                   then if gnt = CPU1 then 2 else pre state
+                   else if pre state = 2 -- rd_wait
+                        then if b_out[VALID] then 3 else 2
+                        else if pre state = 3 -- rd_upd
+                             then 0
+                             else if pre state = 4 -- wr
+                                  then if gnt = CPU1 then 5 else pre state
+                                  else if pre state = 5 -- wr_wait
+                                       then if b_out[VALID]
+                                            then 0
+                                            else 5
+                                       else pre state);
+
+  next_addr = 0->(if state = 1 then ad else pre next_addr);
+tel
+
+node main (op, valid, data, ad: bool ^ NPROCS) returns ();
+var proc_op, proc_valid, proc_data, proc_ad, gel: bool ^ NPROCS;
+    arb_gnt: int;
+    mem_b_in: b_wires;
+    CPU1_b_in: b_wires;
+    CPU2_b_in: b_wires;
+    CPU3_b_in: b_wires;
+    b_out: b_wires;
+    req: bool ^ (NPROCS+1);
+    cache_data: bool ^ NPROCS;
+let
+  (proc_op[0], proc_valid[0], proc_data[0], proc_ad[0]) = proc1(op[0], valid[0], gel[0], cache_data[0], data[0], ad[0]);
+  (proc_op[1], proc_valid[1], proc_data[1], proc_ad[1]) = proc2(op[1], valid[1], gel[1], cache_data[1], data[1], ad[1]);
+  (proc_op[2], proc_valid[2], proc_data[2], proc_ad[2]) = proc3(op[2], valid[2], gel[2], cache_data[2], data[2], ad[2]);
+ 
+  (mem_b_in, req[0]) = memory(arb_gnt, b_out);
+  arb_gnt = bcu(req);
+  
+  b_out = bus([mem_b_in[0], mem_b_in[1], mem_b_in[2], mem_b_in[3],
+              CPU1_b_in[0], CPU1_b_in[1], CPU1_b_in[2], CPU1_b_in[3], 
+              CPU2_b_in[0], CPU2_b_in[1], CPU2_b_in[2], CPU2_b_in[3],
+              CPU3_b_in[0], CPU3_b_in[1], CPU3_b_in[2], CPU3_b_in[3]], arb_gnt);
+  (gel[0], req[1], cache_data[0], CPU1_b_in) = cache1(proc_op[0], proc_valid[0], arb_gnt, proc_data[0], proc_ad[0], b_out);
+  (gel[1], req[2], cache_data[1], CPU2_b_in) = cache2(proc_op[1], proc_valid[1], arb_gnt, proc_data[1], proc_ad[1], b_out);
+  (gel[2], req[3], cache_data[2], CPU3_b_in) = cache3(proc_op[2], proc_valid[2], arb_gnt, proc_data[2], proc_ad[2], b_out);
+tel;
