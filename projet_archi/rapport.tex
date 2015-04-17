@@ -17,11 +17,29 @@
  
 \maketitle
 
-\section{Protocole de communication}
+\section{Etude de cas}
+Afin de mettre au point les interfaces de communication entre les
+composants, on va tout d'abord simuler ces dernières sur quelques cas
+(voir énoncé).
+\subsection{Architecture mono-processeur}
+diagramme sequence 1
+
+\subsection{Architecture multi-processeur}
+diagramme sequence 2
+Le mécanisme de SNOOP permet de conserver la cohérence des caches. En effet,
+si un processeur A possède dans son cache la variable stockée à l'adresse X,
+et que le processeur B écrit à l'adresse X, la valeur contenue dans le cache
+de A ne sera plus à jour. Le SNOOP permet au cache de A de détecter une telle
+écriture et se mettre à jour (ou invalider la ligne concernée). Ajouter à
+cela un mécanisme d'écriture atomique (LL/SC par exemple) permet de garantir
+des accès exclusifs à des données partagées.
+
+\section{Interfaces entre composants}
 Afin de modéliser cette architecture, il a tout d'abord fallu identifier le 
 protocole de communication utilisé. Les composants communiqueront via les
 signaux suivants (les canaux nommés \textit{b\_in} et \textit{b\_out} sont
-des nappes de 4 fils [AD, CTRL, VALID, DT]):
+des nappes de 4 fils [AD, CTRL, VALID, DT], \textit{arb\_gnt} un entier,
+les autres sont booléens):
 \begin{center}
 \includegraphics[scale=0.5]{images/archi.pdf}
 \end{center}
@@ -79,9 +97,10 @@ Le cache du processeur est modélisé sous la forme de l'automate suivant :
         
 \end{tikzpicture}
 \end{center}
-On suppose que si aucune requête n'est reçue, on reste dans l'état \texttt{idle}.
-De plus, l'état \texttt{write} fait la mise à jour du cache en cas de \textit{hit}
-et l'état \texttt{idle} renvoie la valeur en cache en cas de \textit{hit} sur une
-lecture.
+On suppose que si aucune requête n'est reçue, on reste dans l'état
+\texttt{idle}. De plus, l'état \texttt{write} fait la mise à jour du cache en
+cas de \textit{hit} et envoie la requête sur le bus dans tous les cas. L'état 
+\texttt{idle} renvoie la valeur en cache en cas de \textit{hit} sur une lecture
+en un cycle.
 
 \end{document}
