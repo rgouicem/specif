@@ -4,7 +4,7 @@
 \usepackage{graphicx}
 \usepackage[frenchb]{babel}
 \usepackage{tikz}
-%\usepackage{pgf-umlsd}
+\usepackage{pgf-umlsd}
 \usetikzlibrary{arrows,automata}
 \usepackage{makecell}
 \usepackage[T1]{fontenc}
@@ -22,7 +22,9 @@ Afin de mettre au point les interfaces de communication entre les
 composants, on va tout d'abord simuler ces dernières sur quelques cas
 (voir énoncé).
 \subsection{Architecture mono-processeur}
-diagramme sequence 1
+\begin{center}
+\centerline{\includegraphics[scale=0.5]{images/seq1.pdf}}
+\end{center}
 
 \subsection{Architecture multi-processeur}
 diagramme sequence 2
@@ -41,7 +43,7 @@ signaux suivants (les canaux nommés \textit{b\_in} et \textit{b\_out} sont
 des nappes de 4 fils [AD, CTRL, VALID, DT], \textit{arb\_gnt} un entier,
 les autres sont booléens):
 \begin{center}
-\includegraphics[scale=0.5]{images/archi.pdf}
+\centerline{\includegraphics[scale=0.5]{images/archi.pdf}}
 \end{center}
 
 \section{Bus}
@@ -52,6 +54,18 @@ vers la nappe de sortie du bus, selon le maître déterminé par le BCU (signal
   \item si une requête d'un processeur passe sur le bus, elle sera immédiatement
     suivie d'une réponse de la mémoire
 \end{itemize}
+
+\section{Arbitre du bus (BCU)}
+L'arbitre du bus (ou BCU) doit, à chaque cycle, déterminer si un maître souhaite
+envoyer une requête sur le bus. S'il n'y a qu'une seule demande et que le bus est
+libre, on donne le bus au maître faisant la demande. S'ils sont plusieurs, on
+applique une stratégie pour élire le prochain utilisateur. Une stratégie de type
+round-robin permet d'éviter les famines. Cependant, notre implantation n'utilise
+pour le moment pas cette stratégie, mais donne l'accès au bus dans l'ordre de 
+priorité suivant :
+\[
+MEM > CPU1 > CPU2 > CPU3
+\]
 
 \section{Processeur}
 Le processeur prend en entrée un programme, ici simulé par les signaux suivants:
@@ -97,10 +111,49 @@ Le cache du processeur est modélisé sous la forme de l'automate suivant :
         
 \end{tikzpicture}
 \end{center}
-On suppose que si aucune requête n'est reçue, on reste dans l'état
+\paragraph{}On suppose que si aucune requête n'est reçue, on reste dans l'état
 \texttt{idle}. De plus, l'état \texttt{write} fait la mise à jour du cache en
 cas de \textit{hit} et envoie la requête sur le bus dans tous les cas. L'état 
 \texttt{idle} renvoie la valeur en cache en cas de \textit{hit} sur une lecture
 en un cycle.
+\paragraph{}Le mécanisme de SNOOP a également été implanté. Le cache, lorsqu'il
+n'utilise pas lui-même le bus, surveille les requêtes y passant. Si une requête
+d'écriture sur une adresse faisant un \textit{hit} passe, il se met à jour avec
+cette nouvelle valeur, afin de rester cohérent avec la mémoire.
 
+\section{Mémoire}
+La mémoire stocke l'état de variables à des adresses données. Pour simplifier
+l'implantation et la vérification, on choisit une mémoire à 2 cases (adresse 
+booléenne) pouvant prendre des mots de taille 1 bit (booléens). Cette mémoire
+utilise le SNOOP pour détecter des requêtes la concernant sur le bus. Si elle
+en détecte une, elle demande l'accès au bus à l'arbitre afin de répondre à
+cette requête. \'Etant le maître le plus prioritaire, elle aura toujours
+immédiatement accès au bus si elle le demande et qu'il est libre. On 
+suppose également que la mémoire est extrêmement réactive et répond en un
+cycle.
+
+\section{Gestion de verrous}
+L'ajout de la gestion des verrous afin de protéger des sections critiques
+pose le problème des écritures atomiques. En effet, la prise d'un verrou se fait
+en 2 étapes:
+\begin{itemize}
+  \item[1)] lecture du verrou en mémoire,
+  \item[2)] si le verrou est libre, écrire en mémoire pour le prendre, sinon 
+    recommencer
+\end{itemize}
+Cela pose cependant un problème : si deux processeurs A et B tentent de prendre
+le verrou, l'enchainement suivant les fait tous deux entrer en section 
+critique :
+\[
+A1 \rightarrow B1 \rightarrow A2 \rightarrow B2
+\] 
+En effet, ils vont tous deux lire la même valeur (verrou libre) et donc lancer
+une écriture pour le prendre, chacun pensant être le seul à l'avoir. Il est
+donc nécessaire d'avoir un mécanisme permettant de faire ces deux étapes de
+manière atomique. On ajoute donc un nouveau type d'écriture permettant cela,
+avec la stratégie LL/SC par exemple. Lors de la lecture (étape 1), le cache
+va ``s'enregistrer'' localement, puis surveiller grâce au SNOOP les écritures
+sur le verrou. Si lorsqu'il va exécuter l'étape 2, aucune écriture n'est passée,
+il écrit et prend donc le verrou. S'il voit une écriture sur cette adresse avant
+d'avoir pu le prendre, il se ``désenregistre'' et recommence à l'étape 1.
 \end{document}
