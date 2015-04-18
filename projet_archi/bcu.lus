@@ -1,0 +1,24 @@
+include "constantes.lus"
+
+-- Noeud representant l'arbitre du bus
+-- Entrees : 
+--       req (bool ^ (NPROCS+1)) : Tableau de booleens représentant les requetes emises par les differents composants
+-- Sorties : 
+ --      arb_gnt (int)           : Index du composant pouvant écrire sur le bus
+
+node bcu (req: bool ^ (NPROCS+1)) returns (arb_gnt: int);
+let
+  arb_gnt = NONE->(if req[MEM-1] then 
+                     MEM
+                   else 
+                     (if req[CPU1-1] then 
+                        CPU1
+                      else 
+                        (if req[CPU2-1] then 
+                           CPU2
+                         else 
+                           (if req[CPU3-1] then 
+                              CPU3
+                            else
+                              NONE))));
+tel;

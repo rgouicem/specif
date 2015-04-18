@@ -1,0 +1,37 @@
+-- Noeuds representant les processeurs
+-- Entrees : 
+--      op (bool)         : Operation à effectuer (1 : ecriture, 0 : lecture)
+--      valid (bool)      : Booleen indiquant si l'operation est valide
+--      gel (bool)        : Booleen indiquant si le processeur est gele
+--      data_cache (bool) : Donnee provenant du cache
+--      data_in (bool)    : Donnee provenant de l'utilisateur
+--      ad (bool)         : Adresse sur laquelle porte l'operation
+-- Sorties : 
+--      op_out (bool)     : opération à effectuer
+--      valid_out (bool)  : Booleen indiquant si l'operation est valide
+--      data_out (bool)   : Donnee envoyee au cache
+--      ad_out (bool)     : Adresse sur laquelle porte l'operation
+
+node proc1 (op, valid, gel, data_cahe, data_in, ad: bool) returns (op_out, valid_out, data_out, ad_out: bool);
+let
+  op_out = op;
+  valid_out = valid and not gel;
+  data_out = data_in;
+  ad_out = ad;
+tel
+
+node proc2 (op, valid, gel, data_cahe, data_in, ad: bool) returns (op_out, valid_out, data_out, ad_out: bool);
+let
+  op_out = op;
+  valid_out = valid and not gel;
+  data_out = data_in;
+  ad_out = ad;
+tel
+
+node proc3 (op, valid, gel, data_cahe, data_in, ad: bool) returns (op_out, valid_out, data_out, ad_out: bool);
+let
+  op_out = op;
+  valid_out = valid and not gel;
+  data_out = data_in;
+  ad_out = ad;
+tel

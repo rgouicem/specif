@@ -1,0 +1,325 @@
+include "constantes.lus" 
+
+-- Noeuds representant les caches
+-- Entrees : 
+--     op (bool)        : Operation a effectuer (1 : ecriture, 0 : lecture)
+--     valid (bool)     : Booleen indiquant si l'operation est valide
+--     gnt (int)        : ID du composant ayant acces au bus
+--     val (bool)       : Valeur a ecrire (si l'operation est une ecriture)
+--     ad (bool)        : adresse sur laquelle porte l'operation
+--     b_out (b_wires)  : Valeur présente sur le bus
+-- Sorties :  
+--     gel (bool)       : Booleen indiquant si le processeur est gele
+--     b_req (bool)     : Booleen qui vaut 1 si le cache demande a ecrire sur le bus
+--     val_out (bool)   : Valeur transmise au processeur (en cas de lecture)
+--     b_in (b_wires)   : Valeur a ecrire dans le bus dans le cas d'une requete
+-- Variables internes :  
+--     c_addr (bool)    : Adresse de la case memoire presente dans le cache
+--     c_valid (bool)   : Booleen indiquant si la valeur presente dans le cache est valide
+--     c_data (bool)    : Donnée presente dans le cache
+--     next_addr (bool) : Adresse presente dans le cache des la fin de traitement du miss
+--     state (int)      : Etat de l'automate
+
+node cache1 (op, valid: bool; gnt: int; val: bool; ad: bool; b_out: b_wires) returns (gel, b_req, val_out: bool; b_in: b_wires);
+var c_addr, c_valid, c_data, next_addr: bool; 
+    state: int; -- 0: idle, 1: rd_miss, 2: rd_wait, 3: rd_upd, 4: wr, 5: wr_wait
+let
+  c_addr = 0->(if state = 3 then -- Si on est dans l'etat de mise a jour du cache (apres un miss)
+                 next_addr -- next_addr devient la nouvelle adresse presente dans le cache
+               else 
+                 pre c_addr); -- Sinon on prend la valeur precedente
+
+  c_valid = 0->(if state = 1 then -- Si on vient de detecter un miss
+                  false -- On invalide la donnee presente dans le cache
+                else 
+                  (if state = 3 then -- Sinon si on est dans l'etat de mise a jour
+                     true -- La donnee est valide
+                   else 
+                     pre c_valid)); -- sinon on prend la valeur precedente
+  
+  c_data = 0->(if state = 3 then --Si on est dans l'etat de mise a jour du cache apres un miss sur lecture
+                 b_out[DT] -- La valeur devient la valeur presente sur b_out
+               else 
+                 (if state = 4 and c_addr = ad and c_valid then  -- Sinon si on effectue une ecriture et que l'adresse est
+                    val -- presente dans le cache, on la met a jour
+                  else 
+                    (if b_out[CTRL] and b_out[AD] = c_addr and b_out[VALID] and c_valid then 
+                       b_out[DT] -- Sinon, s'il y a une requete d'ecriture dans la mémoire sur une case présente dans le 
+                                 -- cache, on met a jour (SNOOP)
+                     else 
+                       pre c_data)));
+  
+  gel = false->(if state = 0 then -- Si le cache est dans l'etat idle, le processeur n'est pas gele
+                  false
+                else
+                  true);  -- Sinon, il l'est.
+
+  b_in = [0, 0, false, 0]->(if state = 1 or state = 4 then -- Si on est dans l'etat ou on effectue une requete
+                              --(lecture ou ecriture)
+                              (if valid then -- et si les donnees transmises par le processeur sont valides
+                                 [ad, op, true, val]  -- On met b_in a la bonne valeur
+                               else 
+                                 [ad, op, false, val]) --Sinon, le bit valid de b_in est a faux
+                            else 
+                              (if state = 2 or state = 5 then --Sinon, si on est en attente
+                                 pre b_in -- On prend le b_in precedent
+                               else 
+                                 [0, 0, false, 0]));
+
+  b_req = false->(if state = 1 or state = 4 then --Si on est dans l'etat ou on doit effectuer une requete
+                    true -- On met b_req a vrai
+                  else 
+                    (if state = 2 or state = 5 then -- Si on est en attente d'une reponse 
+                       pre b_req -- on prend la valeur precedente
+                     else 
+                       false));
+
+  val_out = 0->(if state = 3 or (state = 0 and c_addr = ad and not op) then -- Si on est dans l'etat ou on a recu 
+                   -- la reponse de la memoire, ou que la donnée est deja presente dans le cache, on renvoie c_data
+                  c_data
+                else 
+                  pre val_out);
+
+  state = 0->(if pre state = 0 and valid then -- Si on etait dans l'etat idle
+                (if not op then --Si c'est une lecture 
+                   (if pre c_addr = ad and pre c_valid then -- Si l'adresse est dans le cache
+                      0 -- On reste dans l'etat idle
+                    else 
+                      1) -- Il y a miss,  on passe dans l'etat ou on effectue la requete
+                 else
+                   4) -- Ecriture
+              else 
+                (if pre state = 1 then -- Si on etait dans l'etat ou on a effectue la requete
+                   (if gnt = CPU1 then -- Si on a le bus
+                      2 --On passe dans l'etat ou on effectue attend la reponse sur le bus
+                    else 
+                      pre state) --Sinon on attend que notre requete soit prise en compte
+                 else 
+                   (if pre state = 2 then -- Si on etait dans l'etat ou on attendait une reponse
+                      (if b_out[VALID] then  -- Et que la réponse de la mémoire etait positive
+                         3 -- On passe dans l'etat ou on met a jour le cache
+                       else 
+                         2) -- Sinon on attend
+                    else 
+                      (if pre state = 3 then --Si on etait dans l'etat de mise a jour du cache
+                         0 -- On retourne dans l'etat idle
+                       else 
+                         (if pre state = 4 then -- Si on etait dans l'etat ou on effectue une ecriture 
+                            (if gnt = CPU1 then -- Si on a le bus
+                               5 -- on passe dans l'etat ou on attends la reponse de la memoire
+                             else 
+                               pre state) -- On attend d'avoir le bus
+                          else 
+                            (if pre state = 5 then -- Si on etait dans l'etat ou on attendait la reponse de la memoire
+                               (if b_out[VALID] then -- Si on a une reponse
+                                  0 -- on retourne dans l'etat idle
+                                else 
+                                  5) --On attends
+                             else
+                               pre state))))));
+  
+  next_addr = 0->(if state = 1 then ad else pre next_addr);
+tel
+
+node cache2 (op, valid: bool; gnt: int; val: bool; ad: bool; b_out: b_wires) returns (gel, b_req, val_out: bool; b_in: b_wires);
+var c_addr, c_valid, c_data, next_addr: bool; 
+    state: int; -- 0: idle, 1: rd_miss, 2: rd_wait, 3: rd_upd, 4: wr, 5: wr_wait
+let
+  c_addr = 0->(if state = 3 then -- Si on est dans l'etat de mise a jour du cache (apres un miss)
+                 next_addr -- next_addr devient la nouvelle adresse presente dans le cache
+               else 
+                 pre c_addr); -- Sinon on prend la valeur precedente
+
+  c_valid = 0->(if state = 1 then -- Si on vient de detecter un miss
+                  false -- On invalide la donnee presente dans le cache
+                else 
+                  (if state = 3 then -- Sinon si on est dans l'etat de mise a jour
+                     true -- La donnee est valide
+                   else 
+                     pre c_valid)); -- sinon on prend la valeur precedente
+  
+  c_data = 0->(if state = 3 then --Si on est dans l'etat de mise a jour du cache apres un miss sur lecture
+                 b_out[DT] -- La valeur devient la valeur presente sur b_out
+               else 
+                 (if state = 4 and c_addr = ad and c_valid then  -- Sinon si on effectue une ecriture et que l'adresse est
+                    val -- presente dans le cache, on la met a jour
+                  else 
+                    (if b_out[CTRL] and b_out[AD] = c_addr and b_out[VALID] and c_valid then 
+                       b_out[DT] -- Sinon, s'il y a une requete d'ecriture dans la mémoire sur une case présente dans le 
+                                 -- cache, on met a jour (SNOOP)
+                     else 
+                       pre c_data)));
+  
+  gel = false->(if state = 0 then -- Si le cache est dans l'etat idle, le processeur n'est pas gele
+                  false
+                else
+                  true);  -- Sinon, il l'est.
+
+  b_in = [0, 0, false, 0]->(if state = 1 or state = 4 then -- Si on est dans l'etat ou on effectue une requete
+                              --(lecture ou ecriture)
+                              (if valid then -- et si les donnees transmises par le processeur sont valides
+                                 [ad, op, true, val]  -- On met b_in a la bonne valeur
+                               else 
+                                 [ad, op, false, val]) --Sinon, le bit valid de b_in est a faux
+                            else 
+                              (if state = 2 or state = 5 then --Sinon, si on est en attente
+                                 pre b_in -- On prend le b_in precedent
+                               else 
+                                 [0, 0, false, 0]));
+
+  b_req = false->(if state = 1 or state = 4 then --Si on est dans l'etat ou on doit effectuer une requete
+                    true -- On met b_req a vrai
+                  else 
+                    (if state = 2 or state = 5 then -- Si on est en attente d'une reponse 
+                       pre b_req -- on prend la valeur precedente
+                     else 
+                       false));
+
+  val_out = 0->(if state = 3 or (state = 0 and c_addr = ad and not op) then -- Si on est dans l'etat ou on a recu 
+                   -- la reponse de la memoire, ou que la donnée est deja presente dans le cache, on renvoie c_data
+                  c_data
+                else 
+                  pre val_out);
+
+  state = 0->(if pre state = 0 and valid then -- Si on etait dans l'etat idle
+                (if not op then --Si c'est une lecture 
+                   (if pre c_addr = ad and pre c_valid then -- Si l'adresse est dans le cache
+                      0 -- On reste dans l'etat idle
+                    else 
+                      1) -- Il y a miss,  on passe dans l'etat ou on effectue la requete
+                 else
+                   4) -- Ecriture
+              else 
+                (if pre state = 1 then -- Si on etait dans l'etat ou on a effectue la requete
+                   (if gnt = CPU2 then -- Si on a le bus
+                      2 --On passe dans l'etat ou on effectue attend la reponse sur le bus
+                    else 
+                      pre state) --Sinon on attend que notre requete soit prise en compte
+                 else 
+                   (if pre state = 2 then -- Si on etait dans l'etat ou on attendait une reponse
+                      (if b_out[VALID] then  -- Et que la réponse de la mémoire etait positive
+                         3 -- On passe dans l'etat ou on met a jour le cache
+                       else 
+                         2) -- Sinon on attend
+                    else 
+                      (if pre state = 3 then --Si on etait dans l'etat de mise a jour du cache
+                         0 -- On retourne dans l'etat idle
+                       else 
+                         (if pre state = 4 then -- Si on etait dans l'etat ou on effectue une ecriture 
+                            (if gnt = CPU2 then -- Si on a le bus
+                               5 -- on passe dans l'etat ou on attends la reponse de la memoire
+                             else 
+                               pre state) -- On attend d'avoir le bus
+                          else 
+                            (if pre state = 5 then -- Si on etait dans l'etat ou on attendait la reponse de la memoire
+                               (if b_out[VALID] then -- Si on a une reponse
+                                  0 -- on retourne dans l'etat idle
+                                else 
+                                  5) --On attends
+                             else
+                               pre state))))));
+  
+  next_addr = 0->(if state = 1 then ad else pre next_addr);
+tel
+
+node cache3 (op, valid: bool; gnt: int; val: bool; ad: bool; b_out: b_wires) returns (gel, b_req, val_out: bool; b_in: b_wires);
+var c_addr, c_valid, c_data, next_addr: bool; 
+    state: int; -- 0: idle, 1: rd_miss, 2: rd_wait, 3: rd_upd, 4: wr, 5: wr_wait
+let
+  c_addr = 0->(if state = 3 then -- Si on est dans l'etat de mise a jour du cache (apres un miss)
+                 next_addr -- next_addr devient la nouvelle adresse presente dans le cache
+               else 
+                 pre c_addr); -- Sinon on prend la valeur precedente
+
+  c_valid = 0->(if state = 1 then -- Si on vient de detecter un miss
+                  false -- On invalide la donnee presente dans le cache
+                else 
+                  (if state = 3 then -- Sinon si on est dans l'etat de mise a jour
+                     true -- La donnee est valide
+                   else 
+                     pre c_valid)); -- sinon on prend la valeur precedente
+  
+  c_data = 0->(if state = 3 then --Si on est dans l'etat de mise a jour du cache apres un miss sur lecture
+                 b_out[DT] -- La valeur devient la valeur presente sur b_out
+               else 
+                 (if state = 4 and c_addr = ad and c_valid then  -- Sinon si on effectue une ecriture et que l'adresse est
+                    val -- presente dans le cache, on la met a jour
+                  else 
+                    (if b_out[CTRL] and b_out[AD] = c_addr and b_out[VALID] and c_valid then 
+                       b_out[DT] -- Sinon, s'il y a une requete d'ecriture dans la mémoire sur une case présente dans le 
+                                 -- cache, on met a jour (SNOOP)
+                     else 
+                       pre c_data)));
+  
+  gel = false->(if state = 0 then -- Si le cache est dans l'etat idle, le processeur n'est pas gele
+                  false
+                else
+                  true);  -- Sinon, il l'est.
+
+  b_in = [0, 0, false, 0]->(if state = 1 or state = 4 then -- Si on est dans l'etat ou on effectue une requete
+                              --(lecture ou ecriture)
+                              (if valid then -- et si les donnees transmises par le processeur sont valides
+                                 [ad, op, true, val]  -- On met b_in a la bonne valeur
+                               else 
+                                 [ad, op, false, val]) --Sinon, le bit valid de b_in est a faux
+                            else 
+                              (if state = 2 or state = 5 then --Sinon, si on est en attente
+                                 pre b_in -- On prend le b_in precedent
+                               else 
+                                 [0, 0, false, 0]));
+
+  b_req = false->(if state = 1 or state = 4 then --Si on est dans l'etat ou on doit effectuer une requete
+                    true -- On met b_req a vrai
+                  else 
+                    (if state = 2 or state = 5 then -- Si on est en attente d'une reponse 
+                       pre b_req -- on prend la valeur precedente
+                     else 
+                       false));
+
+  val_out = 0->(if state = 3 or (state = 0 and c_addr = ad and not op) then -- Si on est dans l'etat ou on a recu 
+                   -- la reponse de la memoire, ou que la donnée est deja presente dans le cache, on renvoie c_data
+                  c_data
+                else 
+                  pre val_out);
+
+  state = 0->(if pre state = 0 and valid then -- Si on etait dans l'etat idle
+                (if not op then --Si c'est une lecture 
+                   (if pre c_addr = ad and pre c_valid then -- Si l'adresse est dans le cache
+                      0 -- On reste dans l'etat idle
+                    else 
+                      1) -- Il y a miss,  on passe dans l'etat ou on effectue la requete
+                 else
+                   4) -- Ecriture
+              else 
+                (if pre state = 1 then -- Si on etait dans l'etat ou on a effectue la requete
+                   (if gnt = CPU3 then -- Si on a le bus
+                      2 --On passe dans l'etat ou on effectue attend la reponse sur le bus
+                    else 
+                      pre state) --Sinon on attend que notre requete soit prise en compte
+                 else 
+                   (if pre state = 2 then -- Si on etait dans l'etat ou on attendait une reponse
+                      (if b_out[VALID] then  -- Et que la réponse de la mémoire etait positive
+                         3 -- On passe dans l'etat ou on met a jour le cache
+                       else 
+                         2) -- Sinon on attend
+                    else 
+                      (if pre state = 3 then --Si on etait dans l'etat de mise a jour du cache
+                         0 -- On retourne dans l'etat idle
+                       else 
+                         (if pre state = 4 then -- Si on etait dans l'etat ou on effectue une ecriture 
+                            (if gnt = CPU3 then -- Si on a le bus
+                               5 -- on passe dans l'etat ou on attends la reponse de la memoire
+                             else 
+                               pre state) -- On attend d'avoir le bus
+                          else 
+                            (if pre state = 5 then -- Si on etait dans l'etat ou on attendait la reponse de la memoire
+                               (if b_out[VALID] then -- Si on a une reponse
+                                  0 -- on retourne dans l'etat idle
+                                else 
+                                  5) --On attends
+                             else
+                               pre state))))));
+  
+  next_addr = 0->(if state = 1 then ad else pre next_addr);
+tel
+

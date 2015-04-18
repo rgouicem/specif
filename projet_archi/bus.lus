@@ -1,0 +1,26 @@
+include "constantes.lus"
+
+-- Noeud representant le bus
+-- Entrees : 
+--      b_in (bool ^ (4 * (NPROCS+1))) : Tableau contenant les b_in de tout les composants
+--      arg_gnt (int)                  : Index du composant ayant le droit d'ecrire sur le bus
+-- Sorties : 
+--      b_out (b_wires)                : Nappe de fils sortante
+
+node bus (b_in: bool ^ (4*(NPROCS+1)); arb_gnt: int) returns (b_out: b_wires);
+let
+  b_out = [0, 0, false, 0]->(if arb_gnt = MEM then 
+                               [b_in[AD], b_in[CTRL], b_in[VALID], b_in[DT]]
+                             else 
+                               (if arb_gnt = CPU1 then 
+                                  [b_in[4+AD], b_in[4+CTRL], b_in[4+VALID], b_in[4+DT]]
+                                else 
+                                  (if arb_gnt = CPU2 then 
+                                     [b_in[8+AD], b_in[8+CTRL], b_in[8+VALID], b_in[8+DT]]
+                                   else 
+                                     (if arb_gnt = CPU3 then 
+                                        [b_in[12+AD], b_in[12+CTRL], b_in[12+VALID], b_in[12+DT]]
+                                      else 
+                                        [0, 0, false, 0]))));
+tel
+  

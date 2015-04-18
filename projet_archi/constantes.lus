@@ -1,0 +1,35 @@
+-- Nombre de processeurs
+const NPROCS: int=3;
+
+-- Taille de la memoire en nombre de mots
+const MEMSIZE: int = 2;
+
+-- Taille d'un mot en bits
+const WORDSIZE: int = 1;
+
+
+----------------------------
+----- wires definition -----
+----------------------------
+
+--Type de la nappe de fils
+type b_wires = bool ^ 4;
+
+-- Index de l'adresse dans le tableau representant la nappe de fils
+const AD: int = 0 ;
+
+-- Index de du bit de controle
+const CTRL: int = 1 ;-- true = write,  false = read
+
+-- Index du bit indiquant la validite d'une commande
+const VALID: int=2;
+
+-- Index de la donnee
+const DT: int=3;
+
+-- target IDs
+const NONE: int = 0;
+const MEM:  int = 1;
+const CPU1: int = 2; -- ID du cache du premier cpu
+const CPU2: int = 3; -- ID du cache du second cpu
+const CPU3: int = 4; -- ID du cache du troisieme cpu

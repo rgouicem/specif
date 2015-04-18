@@ -1,0 +1,38 @@
+include "constantes.lus"
+
+-- Node representant la memoire
+-- Entrees : 
+--     arb_gnt (int)                 : grant de l'arbitre
+--     b_out (b_wires)               : nappe de fils sortant du bus (lu par tout les composants)
+-- Sorties : 
+--     b_in_mem (b_wires)            : b_in de la memoire
+--     b_req (bool)                  : Booleen indiquant si la memoire demande l'ecriture sur le b_out du bus
+-- Variables internes : 
+--     mem (bool ^ MEMSIZE*WORDSIZE) : Tableau representant la memoire. 
+
+node memory (arb_gnt: int; b_out: b_wires) returns (b_in_mem: b_wires; b_req: bool);
+var mem: bool ^ (MEMSIZE*WORDSIZE);
+let
+  mem = [0, 0] ->(if b_out[VALID] and b_out[CTRL] then
+                    (if not b_out[AD] then 
+                       [b_out[DT], pre mem[1]] 
+                     else 
+                       [pre mem[0], b_out[DT]]) 
+                  else 
+                    pre mem);
+  
+
+  b_in_mem = [0, 0, 0, 0]->(if b_out[VALID] then 
+                              (if b_out[AD] then 
+                                 [0, 0, true, mem[1]]
+                               else 
+                                 [0, 0, true, mem[0]]) 
+                            else 
+                              [0, 0, false, 0]);
+  
+
+  b_req = false->(if b_out[VALID] and not b_out[CTRL] then 
+                    true 
+                  else 
+                    false);
+tel
