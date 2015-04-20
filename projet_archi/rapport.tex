@@ -27,7 +27,12 @@ composants, on va tout d'abord simuler ces dernières sur quelques cas
 \end{center}
 
 \subsection{Architecture multi-processeur}
-diagramme sequence 2
+On présente ici les échages lors des exécutions de P1a et P2a. Pour alléger le
+diagramme, chaque CPU est fusionné avec son cache, et les mises à jour internes
+de chaque composant sont ommises.
+\begin{center}
+\centerline{\includegraphics[scale=0.5]{images/seq2.pdf}}
+\end{center}
 Le mécanisme de SNOOP permet de conserver la cohérence des caches. En effet,
 si un processeur A possède dans son cache la variable stockée à l'adresse X,
 et que le processeur B écrit à l'adresse X, la valeur contenue dans le cache
@@ -64,8 +69,12 @@ round-robin permet d'éviter les famines. Cependant, notre implantation n'utilis
 pour le moment pas cette stratégie, mais donne l'accès au bus dans l'ordre de 
 priorité suivant :
 \[
-MEM > CPU1 > CPU2 > CPU3
+MEM > CPU1 > CPU2 > CPU3 > NONE
 \]
+On obtient donc un chronogramme de ce type :
+\begin{center}
+\centerline{\includegraphics[scale=0.6]{images/bcu.png}}
+\end{center}
 
 \section{Processeur}
 Le processeur prend en entrée un programme, ici simulé par les signaux suivants:
@@ -84,6 +93,10 @@ Dans l'implantation actuelle, cette propriété n'est pas vérifiée car le BCU
 donne l'accès au bus toujours dans le même ordre. Une attribution par 
 round-robin règlerait ce problème en supprimant les famines (voir code 
 commenté du noeud bcu).
+\begin{center}
+\centerline{\includegraphics[scale=0.6]{images/proc.png}}
+\end{center}
+
 
 \section{Cache}
 Le cache du processeur est modélisé sous la forme de l'automate suivant :
@@ -131,6 +144,9 @@ cette requête. \'Etant le maître le plus prioritaire, elle aura toujours
 immédiatement accès au bus si elle le demande et qu'il est libre. On 
 suppose également que la mémoire est extrêmement réactive et répond en un
 cycle.
+\begin{center}
+\centerline{\includegraphics[scale=0.5]{images/mem.png}}
+\end{center}
 
 \section{Gestion de verrous}
 L'ajout de la gestion des verrous afin de protéger des sections critiques
